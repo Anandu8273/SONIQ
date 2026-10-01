@@ -1,114 +1,139 @@
-# SONIQ — Evidence-Driven AI Network Investigator for SONiC
+# SONIQ
 
-SONIQ is an investigation layer **above** SONiC. It does not guess a root cause. It collects evidence through registered diagnostic tools, updates competing hypotheses, then produces an explainable probable RCA with observed facts separated from inference.
+**Evidence-Driven AI Network Investigator for SONiC**
 
-Human approval is required before any potentially disruptive action. The MVP does not change SONiC configuration.
+SONIQ is an AI-assisted network operations agent designed to observe a SONiC environment, investigate network issues using real diagnostic evidence, explain likely root causes, and support policy-controlled remediation.
 
-## Current phase (1–5)
+> **Core principle: Evidence Before Action.** Measurements and conclusions must be grounded in collected network evidence. The reasoning model must not invent telemetry or execute arbitrary shell commands.
 
-Working now:
+## Goals
 
-1. Repository structure
-2. Pydantic models
-3. Tool registry (read-only tools only)
-4. Mock diagnostic tools with deterministic fixtures
-5. Investigation loop **without an LLM** (deterministic planner)
+- Connect to real SONiC devices and collect operational data.
+- Investigate latency, packet loss, interface errors, routing changes, and BGP failures.
+- Select diagnostic tools based on current evidence.
+- Maintain investigation state and test competing hypotheses.
+- Produce traceable root-cause analysis (RCA).
+- Require approval for network-changing actions unless an explicit policy permits them.
+- Verify network health after approved remediation.
 
-Not in this phase: live SONiC CLI execution in tests, LLM tool calling, React dashboard, autonomous remediation.
+## Architecture
 
-## First demonstration
-
-From the repository root (`d:\PROJECT\SONIQ`):
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m pytest tests -q
-python backend/demo.py
+```text
+SONiC Environment
+       |
+       v
+Network Adapter
+       |
+       v
+Registered Diagnostic Tools
+       |
+       v
+Evidence Normalization and Store
+       |
+       v
+Agent State and Hypotheses
+       |
+       v
+Investigation Planner / Reasoner
+       |
+       +----> Select next tool ----> Collect more evidence
+       |
+       v
+RCA and Recommendation
+       |
+       v
+Approval / Policy Check
+       |
+       v
+Remediation (when implemented and authorized)
+       |
+       v
+Recovery Verification
 ```
 
-What the demo does:
+## Repository Structure
 
-- Creates incident `High latency between Leaf-1 and Leaf-2`
-- Seeds seven connectivity hypotheses
-- Calls mock tools (`get_latency`, `get_packet_loss`, `get_interface_errors`, …)
-- Stores structured evidence
-- Updates hypotheses with explicit rules
-- Prints an RCA-ready report (facts vs inference) with **APPROVAL REQUIRED**
-
-Expected mock observations for this scenario:
-
-- Latency ~35 ms vs baseline 2 ms
-- Packet loss 0%
-- Interface errors 0
-- Route installed
-- BGP established
-- ASIC/platform: unavailable (not fabricated)
-
-The planner should weaken interface/routing/BGP/loss hypotheses and treat elevated latency as a congestion/path-delay hypothesis **without claiming certainty**.
-
-Optional second scenario:
-
-```powershell
-python backend/demo.py --scenario interface_degradation_leaf1
+```text
+SONIQ/
+├── adapters/       # SONiC and network transports
+├── agent/          # Runtime, decisions, planning, and state
+├── backend/        # Configuration and shared utilities
+├── config/         # Runtime configuration
+├── evidence/       # Evidence models, normalization, and storage
+├── rca/            # Root-cause analysis and reporting
+├── recovery/       # Baselines and recovery verification
+├── tests/          # Automated checks
+├── tools/          # Registered diagnostic capabilities
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── README.md
 ```
 
-## Tests
+The structure may change as real-device integration is implemented.
 
-```powershell
-python -m pytest tests -q
-```
+## Environment
 
-Tests use mocked SONiC responses. A live topology is not required.
+The development lab uses SONiC Virtual Switch (VS) nodes managed with Containerlab. The current lab has two communicating leaf nodes.
 
-## Configuration
+SONIQ is intended to run separately and access the nodes through a configured adapter. Normal SONIQ setup should not rebuild or alter the existing SONiC lab.
 
-Edit `config/config.yaml`. Node container names are **not** hard-coded in Python. Do not put passwords or API keys in this file.
+## Getting Started
 
-```yaml
-sonic:
-  nodes:
-    leaf1:
-      transport: docker
-      container: sonic-leaf1
-    leaf2:
-      transport: docker
-      container: sonic-leaf2
-tools:
-  mode: mock
-  allow_write: false
-agent:
-  max_steps: 10
-  require_approval: true
-  llm_enabled: false
-```
+1. Clone the repository:
 
-## Replacing mocks with real SONiC (next phase)
+   ```bash
+   git clone https://github.com/Anandu8273/SONIQ.git
+   cd SONIQ
+   ```
 
-Do **not** change the existing topology.
+2. Create and activate a Python virtual environment.
 
-The agent calls tools by name (`get_interface_errors`). Tools call `NetworkAdapter` methods. Swap `MockSonicAdapter` for `SONiCCLIAdapter` when you are ready:
+   **Windows PowerShell**
+   ```powershell
+   py -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
 
-- Interface: `adapters/base.py` (`execute`, `get_interface_stats`, `get_interface_errors`, `get_latency`, `get_packet_loss`, `get_routes`, `get_bgp_status`, `get_logs`, `get_config`, `get_asic_state`, `get_platform_health`)
-- Live CLI: `adapters/sonic_cli.py` (docker exec or later SSH; command strings come from `config.yaml`)
-- gNMI: `adapters/gnmi.py` stub for later Get/Subscribe
+   **Linux**
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
 
-Before enabling live commands, confirm each CLI exists on your SONiC image. If a command is missing, change the template in config; do not assume a command.
+3. Install dependencies:
 
-Set `tools.mode: live` only after those commands are verified. Read-only investigation remains the default.
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## API (thin)
+4. Configure the real SONiC connection using the project's adapter and configuration settings. Keep credentials in environment variables or a local, untracked `.env` file. Never commit secrets.
 
-```powershell
-uvicorn backend.main:app --reload
-```
+5. Review the adapter configuration and available tools before running an investigation.
 
-Endpoints include `POST /incidents`, `POST /incidents/{id}/investigate`, evidence/hypotheses/report, `POST .../approve`, `POST .../verify`.
+> The launch command and required settings depend on the current implementation. Confirm them in the code and configuration before running against a device.
 
-## Design rules
+## Safety
 
-- The LLM (when added) may only emit `CALL_TOOL`, `FINALIZE_RCA`, or `REQUEST_HUMAN_APPROVAL`.
-- Network facts come from tools. Unavailable ≠ observed zero.
-- Confidence is **evidence-weighted**, not a calibrated probability.
-- Ground truth in `evaluation/ground_truth.json` is for scoring only. The agent never reads it.
+- Use read-only diagnostic access by default.
+- Allow the agent to call only registered tools with validated arguments.
+- Never pass LLM-generated shell commands directly to a device.
+- Require approval and policy checks for configuration changes, restarts, and other write operations.
+- Treat failed or unavailable telemetry as unknown, not as proof of health.
+- Keep evidence, timestamps, source tools, and decisions traceable.
+
+## Development Status
+
+SONIQ is under active development. Its target workflow is:
+
+**Observe → Reason → Select Tool → Collect Evidence → Update State → Decide → Verify**
+
+A capability should be considered implemented only after it has been verified against the configured SONiC environment. Simulated data must not be presented as real network evidence.
+
+## Contributing
+
+Use feature branches and pull requests. Keep commits focused and review changes before merging. Do not commit credentials, device secrets, generated artifacts, or local environment files.
+
+## License
+
+No license has been added yet. Until one is selected, do not assume the repository grants permission to reuse or redistribute its code.
