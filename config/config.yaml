@@ -8,8 +8,6 @@ sonic:
       transport: docker
       container: sonic-leaf2
       management_ip: null
-  # Command templates are configurable so SONiC version differences
-  # do not leak into the agent. Live execution is not used in Phase 1-5.
   commands:
     interface_stats: "show interfaces counters"
     interface_errors: "show interfaces counters errors"

@@ -152,7 +152,6 @@ def _core_metrics_present(evidence: list[Evidence]) -> set[str]:
 def _ready_to_finalize(investigation: Investigation) -> bool:
     present = _core_metrics_present(investigation.evidence)
     if not CORE_TOOLS.issubset(present) and investigation.steps_taken < investigation.max_steps:
-        # BGP unavailability still counts via bgp_availability metric
         missing = set(CORE_TOOLS) - present
         if missing and missing != {"get_bgp_status"}:
             return False
