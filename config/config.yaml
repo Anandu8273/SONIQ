@@ -1,0 +1,48 @@
+sonic:
+  nodes:
+    leaf1:
+      transport: docker
+      container: sonic-leaf1
+      management_ip: null
+    leaf2:
+      transport: docker
+      container: sonic-leaf2
+      management_ip: null
+  # Command templates are configurable so SONiC version differences
+  # do not leak into the agent. Live execution is not used in Phase 1-5.
+  commands:
+    interface_stats: "show interfaces counters"
+    interface_errors: "show interfaces counters errors"
+    bgp_summary: "show bgp summary"
+    ip_route: "show ip route"
+    running_config: "show runningconfiguration all"
+    logs: "show logging"
+    platform_summary: "show platform summary"
+    transceiver: "show interfaces transceiver"
+
+agent:
+  max_steps: 10
+  require_approval: true
+  llm_enabled: false
+  planner: deterministic
+
+tools:
+  allow_write: false
+  mode: mock
+  timeout_seconds: 15
+
+mock:
+  scenario: high_latency_leaf1_leaf2
+
+llm:
+  provider: none
+  model: none
+  api_key_env: SONIQ_LLM_API_KEY
+
+logging:
+  level: INFO
+  json_logs: true
+
+storage:
+  kind: memory
+  json_path: data/investigations

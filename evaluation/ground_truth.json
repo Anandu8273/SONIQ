@@ -1,0 +1,11 @@
+[
+  {
+    "scenario_id": "SCENARIO-001",
+    "fault": "packet_loss",
+    "target": "leaf1",
+    "interface": "Ethernet0",
+    "injected_at": "2026-10-01T08:01:00Z",
+    "expected_effects": ["packet_loss_increase", "latency_increase"],
+    "expected_hypotheses": ["interface_degradation", "packet_loss"]
+  }
+]
